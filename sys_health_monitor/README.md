@@ -202,29 +202,3 @@ Some terminals don't handle the clear-and-redraw cleanly. Try a different termin
 
 ---
 
-## What I learned building this
-
-This was originally going to be a simple "print psutil values in a loop" script. The interesting parts only show up when you take it seriously:
-
-- Naive alerting is awful. Comparing values to thresholds every tick produces dozens of duplicate alerts for one real problem. Sustained-breach plus cooldown logic is what makes alerts useful.
-- Cross-platform is harder than it looks. `os.system('clear')` silently fails on Windows. `disk_usage('/')` crashes on Windows. Real tools handle this.
-- Blocking calls are sneaky. `psutil.cpu_percent(interval=1)` freezes the program for a full second every tick. Priming once at startup and then using `interval=None` makes it instant.
-- Logs grow forever if you let them. RotatingFileHandler is one line of code that prevents this.
-- Configuration belongs in a config file, not in code. Once thresholds were in config.yaml, tuning the system became a matter of editing one file and restarting — no code changes.
-
----
-
-## Things I might add later
-
-- Web dashboard (Flask + WebSockets + Chart.js) so you can watch from your phone
-- SQLite storage for proper time-series queries
-- Anomaly detection — alerts when readings deviate from a rolling baseline
-- Disk-fill forecasting — predicting when the disk will be full at current rate
-- Slack or Discord webhook notifier
-- Per-process alert rules — alert if any single process uses more than 50% CPU
-
----
-
-## License
-
-MIT — do whatever you want with it.
