@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────
+#  System Health Monitor — Configuration
+#  Edit values here. No code changes needed. Restart to apply.
+# ─────────────────────────────────────────────────────────────
+
+# How often to sample the system (in seconds).
+# Smaller = more responsive but more CPU used by the monitor itself.
+refresh_interval: 2
+
+# Threshold settings per metric.
+#   warning         → yellow zone, no alert fired yet
+#   critical        → alert fires (after sustained breach below)
+#   sustained_ticks → metric must stay over `critical` for this many
+#                     consecutive readings before an alert fires.
+#                     Prevents false alarms from one-off spikes.
+thresholds:
+  cpu:
+    warning: 70
+    critical: 85
+    sustained_ticks: 3
+  memory:
+    warning: 75
+    critical: 90
+    sustained_ticks: 3
+  disk:
+    warning: 80
+    critical: 90
+    sustained_ticks: 2     # disk fills slowly, so 2 ticks is enough
+
+# Once an alert fires, suppress the same alert for this many seconds.
+# Without this, a sustained problem floods the log every few seconds.
+alert_cooldown_seconds: 60
+
+# Where to write logs. Path is relative to the project root.
+log_file: "logs/health.log"
+
+# How many top CPU-consuming processes to show on the dashboard.
+top_processes: 5
