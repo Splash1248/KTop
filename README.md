@@ -2,7 +2,6 @@
 
 A real-time CLI tool that watches your computer's CPU, memory, disk, and network — alerts you when something looks wrong, and keeps a log of everything for later.
 
-Think of it as a tiny, personal version of Datadog or Grafana. Built with Python.
 
 ---
 
