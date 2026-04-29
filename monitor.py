@@ -11,7 +11,7 @@ import yaml
 import collector
 import logger as log_module
 from alerts import AlertEngine
-from dashboard import draw
+from dashboard import draw, stop
 
 
 def load_config(path="config.yaml"):
@@ -75,6 +75,7 @@ def main():
         # Wrapped in its own try so an impatient second Ctrl+C
         # doesn't produce a scary traceback during shutdown.
         try:
+            stop()
             elapsed = int(time.time() - started_at)
             mins, secs = divmod(elapsed, 60)
             print("\n\n──────────────────────────────────────────")

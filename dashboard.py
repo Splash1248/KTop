@@ -1,168 +1,118 @@
 """
 dashboard.py — Renders the live dashboard.
-
-Tries to use the `rich` library for a polished UI (gauges, panels,
-process table). If `rich` isn't installed, falls back to a plain
-ANSI version (the old style, but with the cross-platform clear bug
-fixed).
+Now uses rich.live to eliminate flickering!
 """
 
 import os
 
 try:
-    from rich.console import Console
+    from rich.console import Console, Group
     from rich.panel import Panel
     from rich.table import Table
-    from rich.progress import Progress, BarColumn, TextColumn
-    from rich.layout import Layout
     from rich.text import Text
-    _HAS_RICH = True
+    from rich.live import Live
+    import plotext as plt
+    _HAS_RICH_AND_PLT = True
     _console = Console()
+    _live_display = None
 except ImportError:
-    _HAS_RICH = False
+    _HAS_RICH_AND_PLT = False
 
-
-# Cross-platform screen clear. The old version used `os.system('clear')`
-# which silently does nothing on Windows. `cls` is the Windows equivalent.
 def _clear():
     os.system("cls" if os.name == "nt" else "clear")
 
-
-# Map our internal status keys to terminal color names.
 _COLORS = {"ok": "green", "warn": "yellow", "crit": "red"}
 
-
-# ─────────────────────────────────────────────────────────────
-#  Rich version (preferred)
-# ─────────────────────────────────────────────────────────────
+def _generate_plot_ansi(data, color, max_val=100, is_net=False, data2=None, color2=None):
+    plt.clf()
+    plt.plotsize(40, 10)
+    if is_net:
+        plt.plot(data, color=color, marker="braille", label="Up (KB/s)")
+        plt.plot(data2, color=color2, marker="braille", label="Down (KB/s)")
+    else:
+        plt.plot(data, color=color, marker="braille")
+        plt.ylim(0, max_val)
+    plt.theme('clear')
+    return plt.build()
 
 def _draw_rich(stats, events, engine):
-    _clear()
+    global _live_display
 
     cpu_status = engine.status("cpu", stats["cpu_percent"])
     mem_status = engine.status("memory", stats["mem_percent"])
     disk_status = engine.status("disk", stats["disk_percent"])
 
-    # Header panel
     header = Text()
     header.append("  SYSTEM HEALTH MONITOR  ", style="bold white on blue")
-    header.append(f"   {stats['timestamp']}", style="dim")
-    header.append(f"   ↑ uptime: {stats['uptime']}", style="dim")
-    _console.print(header)
-    _console.print()
+    header.append(f"   {stats['timestamp']}   ↑ uptime: {stats['uptime']}", style="dim")
 
-    # Metrics table with bars
-    table = Table.grid(padding=(0, 2))
-    table.add_column(justify="left", style="bold")
-    table.add_column(justify="left")
-    table.add_column(justify="right")
-    table.add_column(justify="left", style="dim")
+    cpu_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["cpu"], _COLORS[cpu_status]))
+    cpu_panel = Panel(cpu_plot, title=f"CPU ({stats['cpu_percent']}%)", border_style=_COLORS[cpu_status])
 
-    def row(label, pct, status, detail):
-        bar_len = 30
-        filled = int(pct / 100 * bar_len)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        bar_text = Text(bar, style=_COLORS[status])
-        pct_text = Text(f"{pct:>5.1f}%", style=_COLORS[status] + " bold")
-        table.add_row(label, bar_text, pct_text, detail)
+    mem_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["mem"], _COLORS[mem_status]))
+    mem_panel = Panel(mem_plot, title=f"MEM ({stats['mem_percent']}%)", border_style=_COLORS[mem_status])
 
-    row("CPU",  stats["cpu_percent"],  cpu_status,
-        f"{stats['cpu_cores']} cores")
-    row("MEM",  stats["mem_percent"],  mem_status,
-        f"{stats['mem_used_mb']} / {stats['mem_total_mb']} MB")
-    row("DISK", stats["disk_percent"], disk_status,
-        f"{stats['disk_used_gb']} / {stats['disk_total_gb']} GB")
+    disk_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["disk"], _COLORS[disk_status]))
+    disk_panel = Panel(disk_plot, title=f"DISK ({stats['disk_percent']}%)", border_style=_COLORS[disk_status])
 
-    _console.print(Panel(table, title="Resources", border_style="cyan"))
+    net_plot = Text.from_ansi(_generate_plot_ansi(
+        stats["history"]["net_sent"], "red",
+        is_net=True, data2=stats["history"]["net_recv"], color2="cyan"
+    ))
+    net_panel = Panel(net_plot, title=f"NET (↑{stats['net_sent_kbs']}KB/s ↓{stats['net_recv_kbs']}KB/s)", border_style="blue")
 
-    # Network panel
-    net_text = (
-        f"  ↑ {stats['net_sent_kbs']:>8.1f} KB/s sent     "
-        f"↓ {stats['net_recv_kbs']:>8.1f} KB/s received"
-    )
-    _console.print(Panel(net_text, title="Network", border_style="cyan"))
+    grid = Table.grid(expand=True)
+    grid.add_column()
+    grid.add_column()
+    grid.add_row(cpu_panel, mem_panel)
+    grid.add_row(disk_panel, net_panel)
 
-    # Top processes table
+    elements = [header, Text(), grid]
+
     if stats["top_processes"]:
-        proc_table = Table(show_header=True, header_style="bold cyan",
-                           border_style="cyan")
-        proc_table.add_column("PID", justify="right", width=8)
-        proc_table.add_column("Name", width=25)
-        proc_table.add_column("CPU %", justify="right", width=8)
-        proc_table.add_column("MEM %", justify="right", width=8)
+        proc_table = Table(show_header=True, header_style="bold cyan", border_style="cyan", expand=True)
+        proc_table.add_column("PID", justify="right", style="dim")
+        proc_table.add_column("Name")
+        proc_table.add_column("CPU %", justify="right", style="red")
+        proc_table.add_column("MEM %", justify="right", style="green")
         for p in stats["top_processes"]:
-            proc_table.add_row(
-                str(p["pid"]),
-                p["name"],
-                f"{p['cpu']:.1f}",
-                f"{p['mem']:.1f}",
-            )
-        _console.print(Panel(proc_table, title="Top Processes",
-                             border_style="cyan"))
+            proc_table.add_row(str(p["pid"]), p["name"], f"{p['cpu']:.1f}", f"{p['mem']:.1f}")
+        elements.append(Panel(proc_table, title="Top Processes", border_style="cyan"))
 
-    # Recent alert events for THIS tick
+    alerts_text = Text()
     if events:
         for e in events:
             style = "red bold" if e["status"] == "FIRED" else "green bold"
             tag = "🔥 FIRED   " if e["status"] == "FIRED" else "✅ RESOLVED"
-            _console.print(f"[{style}]{tag}[/] {e['message']}")
+            alerts_text.append(f"[{style}]{tag}[/] {e['message']}\n")
     else:
-        _console.print("[green]✓ All systems normal.[/]")
+        alerts_text.append("✓ All systems normal.\n", style="green")
+    alerts_text.append("\nPress Ctrl+C to stop.", style="dim")
 
-    _console.print()
-    _console.print("[dim]Press Ctrl+C to stop.[/]")
+    elements.append(alerts_text)
+    layout = Group(*elements)
 
-
-# ─────────────────────────────────────────────────────────────
-#  Fallback version (works without rich)
-# ─────────────────────────────────────────────────────────────
-
-def _ansi(text, color):
-    codes = {"green": "92", "yellow": "93", "red": "91"}
-    return f"\033[{codes[color]}m{text}\033[0m"
-
-
-def _bar(pct, width=30):
-    filled = int(pct / 100 * width)
-    return "[" + "#" * filled + " " * (width - filled) + "]"
-
+    if _live_display is None:
+        _live_display = Live(layout, console=_console, refresh_per_second=4)
+        _live_display.start()
+    else:
+        _live_display.update(layout)
 
 def _draw_plain(stats, events, engine):
     _clear()
     print("=" * 60)
-    print("       SYSTEM HEALTH MONITOR")
-    print(f"       {stats['timestamp']}   uptime: {stats['uptime']}")
+    print("Please install 'rich' and 'plotext' for the graph dashboard.")
+    print("pip install -r requirements.txt")
     print("=" * 60)
 
-    for label, key, metric in [
-        ("CPU ", "cpu_percent", "cpu"),
-        ("MEM ", "mem_percent", "memory"),
-        ("DISK", "disk_percent", "disk"),
-    ]:
-        pct = stats[key]
-        c = _COLORS[engine.status(metric, pct)]
-        print(f"{label} {_ansi(_bar(pct), c)}  {_ansi(f'{pct:5.1f}%', c)}")
-
-    print(f"\nNET   ↑ {stats['net_sent_kbs']} KB/s   ↓ {stats['net_recv_kbs']} KB/s")
-    print("-" * 60)
-    if events:
-        for e in events:
-            tag = "FIRED   " if e["status"] == "FIRED" else "RESOLVED"
-            color = "red" if e["status"] == "FIRED" else "green"
-            print(_ansi(f"[{tag}] {e['message']}", color))
-    else:
-        print(_ansi("All systems normal.", "green"))
-    print("-" * 60)
-    print("Press Ctrl+C to stop.")
-
-
-# ─────────────────────────────────────────────────────────────
-#  Public entrypoint
-# ─────────────────────────────────────────────────────────────
-
 def draw(stats, events, engine):
-    """Render one frame of the dashboard."""
-    if _HAS_RICH:
+    if _HAS_RICH_AND_PLT:
         _draw_rich(stats, events, engine)
     else:
         _draw_plain(stats, events, engine)
+
+def stop():
+    """Stops the Live display so the terminal un-blocks correctly."""
+    global _live_display
+    if _HAS_RICH_AND_PLT and _live_display is not None:
+        _live_display.stop()

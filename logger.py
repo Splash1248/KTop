@@ -68,7 +68,7 @@ def log_event(logger, event):
     Write a structured alert event.
     Uses WARNING level for FIRED events, INFO for RESOLVED.
     """
-    tag = "🔥 FIRED   " if event["status"] == "FIRED" else "✅ RESOLVED"
+    tag = "FIRED   " if event["status"] == "FIRED" else "RESOLVED"
     line = f"{tag} | {event['severity']:<8} | {event['message']}"
     if event["status"] == "FIRED":
         logger.warning(line)
