@@ -1,6 +1,5 @@
-"""
-themes.py — Stable clean themes for KTOP
-"""
+
+
 
 THEMES = {
 
