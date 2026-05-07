@@ -345,14 +345,14 @@ def _draw_rich(stats, events, engine):
             if e["status"] == "FIRED":
 
                 alerts_text.append(
-                    f"🔥 ALERT    {e['message']}\n",
+                    f" ALERT    {e['message']}\n",
                     style=f"bold {theme['crit']}"
                 )
 
             else:
 
                 alerts_text.append(
-                    f"✅ RESOLVED {e['message']}\n",
+                    f" RESOLVED {e['message']}\n",
                     style=f"bold {theme['ok']}"
                 )
 
