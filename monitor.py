@@ -1,10 +1,5 @@
 # monitor.py
-"""
-monitor.py — Entry point. Wires collector → alerts → dashboard → logger.
 
-Reads config from config.yaml, primes the collector, then loops:
-  collect → evaluate alerts → draw → log → sleep.
-"""
 import time
 import yaml
 import argparse
