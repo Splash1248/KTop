@@ -1,6 +1,5 @@
 """
 collector.py — Reads a snapshot of system stats using psutil.
-Now includes historical tracking for time-series graphs.
 """
 
 import os
@@ -14,7 +13,7 @@ _DISK_PATH = os.path.abspath(os.sep)
 _prev_net = None
 _prev_net_time = None
 
-# Store the last 50 data points for our graphs
+
 _HISTORY_LEN = 50
 _history = {
     "cpu": deque([0.0] * _HISTORY_LEN, maxlen=_HISTORY_LEN),

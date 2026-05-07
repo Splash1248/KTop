@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────
 #  System Health Monitor — Configuration
-#  Edit values here. No code changes needed. Restart to apply.
+#  Edit values here. Restart to apply.
 # ─────────────────────────────────────────────────────────────
 
 # How often to sample the system (in seconds).
@@ -25,14 +25,12 @@ thresholds:
   disk:
     warning: 80
     critical: 90
-    sustained_ticks: 2     # disk fills slowly, so 2 ticks is enough
+    sustained_ticks: 2 # disk fills slowly, so 2 ticks is enough
 
 # Once an alert fires, suppress the same alert for this many seconds.
 # Without this, a sustained problem floods the log every few seconds.
 alert_cooldown_seconds: 60
 
-# Where to write logs. Path is relative to the project root.
 log_file: "logs/health.log"
 
-# How many top CPU-consuming processes to show on the dashboard.
 top_processes: 5

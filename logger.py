@@ -1,13 +1,5 @@
 """
 logger.py — Writes metrics and alerts to a rotating log file.
-
-Improvements over the previous version:
-  • Creates the log directory automatically (no more FileNotFoundError
-    on a fresh clone).
-  • Uses RotatingFileHandler so the log can't grow forever — when it
-    hits 1MB, it rolls over and keeps the last 5 files (~5MB total).
-  • Path is configurable, not hardcoded.
-  • Structured event logging for the new alert engine.
 """
 
 import os
@@ -17,12 +9,10 @@ from logging.handlers import RotatingFileHandler
 
 def setup(log_path):
     """
-    Configure the global logger. Call this ONCE at startup.
-    Returns the configured logger instance.
+    Note to others:
+        The global logger. Call this ONCE at startup.
+        Returns the logger instance.
     """
-    # 1. Make sure the directory exists. exist_ok=True means "don't
-    #    crash if it's already there". This single line is what fixes
-    #    the FileNotFoundError on first run.
     log_dir = os.path.dirname(log_path)
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
@@ -30,13 +20,9 @@ def setup(log_path):
     logger = logging.getLogger("health_monitor")
     logger.setLevel(logging.INFO)
 
-    # Avoid attaching duplicate handlers if setup() is called twice.
     if logger.handlers:
         return logger
 
-    # 2. Rotating handler: when the file hits maxBytes, rename it to
-    #    health.log.1, start a fresh health.log. Keep up to backupCount
-    #    old files. Total disk usage capped at ~5 MB.
     handler = RotatingFileHandler(
         log_path,
         maxBytes=1_000_000,        # 1 MB per file
@@ -52,7 +38,6 @@ def setup(log_path):
 
 
 def log_stats(logger, stats):
-    """Write a one-line stats snapshot at INFO level."""
     logger.info(
         f"CPU {stats['cpu_percent']:>5.1f}% | "
         f"MEM {stats['mem_percent']:>5.1f}% "
@@ -65,7 +50,6 @@ def log_stats(logger, stats):
 
 def log_event(logger, event):
     """
-    Write a structured alert event.
     Uses WARNING level for FIRED events, INFO for RESOLVED.
     """
     tag = "FIRED   " if event["status"] == "FIRED" else "RESOLVED"
