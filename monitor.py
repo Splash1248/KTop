@@ -52,7 +52,7 @@ def main():
 
     if args.theme not in themes.THEMES:
 
-        print(f"\n❌ Unknown theme: {args.theme}\n")
+        print(f"\nUnknown theme: {args.theme}\n")
 
         print("Available themes:\n")
         print("  - catppuccin")
