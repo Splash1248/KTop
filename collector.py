@@ -74,7 +74,7 @@ def get_stats():
     disk = psutil.disk_usage(_DISK_PATH)
     net_sent, net_recv = _network_rate()
 
-    # Append newest data to our rolling history
+    # Append newest data
     _history["cpu"].append(cpu)
     _history["mem"].append(mem.percent)
     _history["disk"].append(disk.percent)
