@@ -82,7 +82,7 @@ def _draw_rich(stats, events, engine):
     if events:
         for e in events:
             style = "red bold" if e["status"] == "FIRED" else "green bold"
-            tag = " FIRED   " if e["status"] == "FIRED" else "✅ RESOLVED"
+            tag = " FIRED   " if e["status"] == "FIRED" else "RESOLVED"
             alerts_text.append(f"[{style}]{tag}[/] {e['message']}\n")
     else:
         alerts_text.append("✓ All systems normal.\n", style="green")
