@@ -1,395 +1,118 @@
 """
-dashboard.py — Stable dashboard renderer for KTop
+dashboard.py — Renders the live dashboard.
+Now uses rich.live to eliminate flickering!
 """
 
-import plotext as plt
-import themes
+import os
 
-from rich.live import Live
-from rich.console import Console, Group
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich.align import Align
+try:
+    from rich.console import Console, Group
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+    from rich.live import Live
+    import plotext as plt
+    _HAS_RICH_AND_PLT = True
+    _console = Console()
+    _live_display = None
+except ImportError:
+    _HAS_RICH_AND_PLT = False
 
+def _clear():
+    os.system("cls" if os.name == "nt" else "clear")
 
-# ==========================================
-# CONSOLE
-# ==========================================
+_COLORS = {"ok": "green", "warn": "yellow", "crit": "red"}
 
-_console = Console(color_system="truecolor")
-
-_live_display = None
-
-
-# ==========================================
-# START LIVE
-# ==========================================
-
-def _ensure_live(layout):
-
-    global _live_display
-
-    if _live_display is None:
-
-        _live_display = Live(
-            layout,
-            console=_console,
-            refresh_per_second=4,
-            screen=False,
-            auto_refresh=False
-        )
-
-        _live_display.start()
-
-
-# ==========================================
-# STOP LIVE
-# ==========================================
-
-def stop():
-
-    global _live_display
-
-    if _live_display:
-
-        _live_display.stop()
-        _live_display = None
-
-
-# ==========================================
-# PLOT GENERATOR
-# ==========================================
-
-def _generate_plot_ansi(
-    data,
-    color,
-    max_val=100,
-    is_net=False,
-    data2=None,
-    color2=None
-):
-
+def _generate_plot_ansi(data, color, max_val=100, is_net=False, data2=None, color2=None):
     plt.clf()
-
     plt.plotsize(40, 10)
-
     if is_net:
-
-        plt.plot(
-            data,
-            color=color,
-            marker="braille",
-            label="Upload"
-        )
-
-        plt.plot(
-            data2,
-            color=color2,
-            marker="braille",
-            label="Download"
-        )
-
+        plt.plot(data, color=color, marker="braille", label="Up (KB/s)")
+        plt.plot(data2, color=color2, marker="braille", label="Down (KB/s)")
     else:
-
-        plt.plot(
-            data,
-            color=color,
-            marker="braille"
-        )
-
+        plt.plot(data, color=color, marker="braille")
         plt.ylim(0, max_val)
-
-    plt.theme("pro")
-
+    plt.theme('clear')
     return plt.build()
 
+def _draw_rich(stats, events, engine):
+    global _live_display
 
-# ==========================================
-# HEADER
-# ==========================================
-
-def _build_header(stats, theme):
-
-    icons = theme["icons"]
+    cpu_status = engine.status("cpu", stats["cpu_percent"])
+    mem_status = engine.status("memory", stats["mem_percent"])
+    disk_status = engine.status("disk", stats["disk_percent"])
 
     header = Text()
+    header.append("  SYSTEM HEALTH MONITOR  ", style="bold white on blue")
+    header.append(f"   {stats['timestamp']}   ↑ uptime: {stats['uptime']}", style="dim")
 
-    header.append(
-        f" {icons['system']} KTOP SYSTEM MONITOR ",
-        style=theme["header"]
-    )
+    cpu_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["cpu"], _COLORS[cpu_status]))
+    cpu_panel = Panel(cpu_plot, title=f"CPU ({stats['cpu_percent']}%)", border_style=_COLORS[cpu_status])
 
-    header.append(
-        f"   {stats['timestamp']}   ↑ uptime: {stats['uptime']}",
-        style=theme["dim"]
-    )
+    mem_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["mem"], _COLORS[mem_status]))
+    mem_panel = Panel(mem_plot, title=f"MEM ({stats['mem_percent']}%)", border_style=_COLORS[mem_status])
 
-    return Align.center(header)
+    disk_plot = Text.from_ansi(_generate_plot_ansi(stats["history"]["disk"], _COLORS[disk_status]))
+    disk_panel = Panel(disk_plot, title=f"DISK ({stats['disk_percent']}%)", border_style=_COLORS[disk_status])
 
-
-# ==========================================
-# PANEL BUILDER
-# ==========================================
-
-def _build_stat_panel(title, icon, value, plot, border, bg):
-
-    plot_text = Text()
-
-    if bg:
-
-        plot_text.append_text(plot)
-        plot_text.stylize(bg)
-
-    else:
-
-        plot_text = plot
-
-    return Panel(
-        plot_text,
-        title=f"{icon} {title} ({value}%)",
-        border_style=border,
-        padding=(1, 2),
-        expand=True,
-        style=bg
-    )
-
-
-# ==========================================
-# DRAW
-# ==========================================
-
-def _draw_rich(stats, events, engine):
-
-    theme = themes.CURRENT_THEME
-
-    icons = theme["icons"]
-
-    bg = theme.get("panel_bg", "")
-
-    cpu_status = engine.status(
-        "cpu",
-        stats["cpu_percent"]
-    )
-
-    mem_status = engine.status(
-        "memory",
-        stats["mem_percent"]
-    )
-
-    disk_status = engine.status(
-        "disk",
-        stats["disk_percent"]
-    )
-
-    # HEADER
-
-    header = _build_header(stats, theme)
-
-    # CPU PANEL
-
-    cpu_plot = Text.from_ansi(
-        _generate_plot_ansi(
-            stats["history"]["cpu"],
-            theme[cpu_status]
-        )
-    )
-
-    cpu_panel = _build_stat_panel(
-        "CPU",
-        icons["cpu"],
-        stats["cpu_percent"],
-        cpu_plot,
-        theme[cpu_status],
-        bg
-    )
-
-    # MEMORY PANEL
-
-    mem_plot = Text.from_ansi(
-        _generate_plot_ansi(
-            stats["history"]["mem"],
-            theme[mem_status]
-        )
-    )
-
-    mem_panel = _build_stat_panel(
-        "MEMORY",
-        icons["mem"],
-        stats["mem_percent"],
-        mem_plot,
-        theme[mem_status],
-        bg
-    )
-
-    # DISK PANEL
-
-    disk_plot = Text.from_ansi(
-        _generate_plot_ansi(
-            stats["history"]["disk"],
-            theme[disk_status]
-        )
-    )
-
-    disk_panel = _build_stat_panel(
-        "DISK",
-        icons["disk"],
-        stats["disk_percent"],
-        disk_plot,
-        theme[disk_status],
-        bg
-    )
-
-    # NETWORK PANEL
-
-    net_plot = Text.from_ansi(
-        _generate_plot_ansi(
-            stats["history"]["net_sent"],
-            theme["network_up"],
-            is_net=True,
-            data2=stats["history"]["net_recv"],
-            color2=theme["network_down"]
-        )
-    )
-
-    if bg:
-        net_plot.stylize(bg)
-
-    net_panel = Panel(
-        net_plot,
-        title=(
-            f"{icons['net']} NETWORK "
-            f"(↑{stats['net_sent_kbs']}KB/s "
-            f"↓{stats['net_recv_kbs']}KB/s)"
-        ),
-        border_style=theme["network_border"],
-        padding=(1, 2),
-        expand=True,
-        style=bg
-    )
-
-    # GRID
+    net_plot = Text.from_ansi(_generate_plot_ansi(
+        stats["history"]["net_sent"], "red",
+        is_net=True, data2=stats["history"]["net_recv"], color2="cyan"
+    ))
+    net_panel = Panel(net_plot, title=f"NET (↑{stats['net_sent_kbs']}KB/s ↓{stats['net_recv_kbs']}KB/s)", border_style="blue")
 
     grid = Table.grid(expand=True)
-
     grid.add_column()
     grid.add_column()
-
     grid.add_row(cpu_panel, mem_panel)
     grid.add_row(disk_panel, net_panel)
 
-    elements = [
-        header,
-        Text(),
-        grid
-    ]
-
-    # PROCESS TABLE
+    elements = [header, Text(), grid]
 
     if stats["top_processes"]:
-
-        proc_table = Table(
-            show_header=True,
-            header_style=theme["process_header"],
-            border_style=theme["process_border"],
-            expand=True
-        )
-
-        proc_table.add_column(
-            "PID",
-            justify="right",
-            style=theme["dim"]
-        )
-
-        proc_table.add_column("Process")
-
-        proc_table.add_column(
-            "CPU %",
-            justify="right",
-            style=theme["crit"]
-        )
-
-        proc_table.add_column(
-            "MEM %",
-            justify="right",
-            style=theme["ok"]
-        )
-
+        proc_table = Table(show_header=True, header_style="bold cyan", border_style="cyan", expand=True)
+        proc_table.add_column("PID", justify="right", style="dim")
+        proc_table.add_column("Name")
+        proc_table.add_column("CPU %", justify="right", style="red")
+        proc_table.add_column("MEM %", justify="right", style="green")
         for p in stats["top_processes"]:
-
-            proc_table.add_row(
-                str(p["pid"]),
-                p["name"],
-                f"{p['cpu']:.1f}",
-                f"{p['mem']:.1f}"
-            )
-
-        elements.append(
-            Panel(
-                proc_table,
-                title="󰣇 TOP PROCESSES",
-                border_style=theme["process_border"],
-                padding=(1, 2),
-                style=bg
-            )
-        )
-
-    # ALERTS
+            proc_table.add_row(str(p["pid"]), p["name"], f"{p['cpu']:.1f}", f"{p['mem']:.1f}")
+        elements.append(Panel(proc_table, title="Top Processes", border_style="cyan"))
 
     alerts_text = Text()
-
     if events:
-
         for e in events:
-
-            if e["status"] == "FIRED":
-
-                alerts_text.append(
-                    f" ALERT    {e['message']}\n",
-                    style=f"bold {theme['crit']}"
-                )
-
-            else:
-
-                alerts_text.append(
-                    f" RESOLVED {e['message']}\n",
-                    style=f"bold {theme['ok']}"
-                )
-
+            style = "red bold" if e["status"] == "FIRED" else "green bold"
+            tag = "🔥 FIRED   " if e["status"] == "FIRED" else "✅ RESOLVED"
+            alerts_text.append(f"[{style}]{tag}[/] {e['message']}\n")
     else:
+        alerts_text.append("✓ All systems normal.\n", style="green")
+    alerts_text.append("\nPress Ctrl+C to stop.", style="dim")
 
-        alerts_text.append(
-            "✓ All systems operating normally.\n",
-            style=theme["ok"]
-        )
-
-    alerts_text.append(
-        "\nCtrl+C to stop.",
-        style=theme["dim"]
-    )
-
-    elements.append(
-        Panel(
-            alerts_text,
-            border_style=theme["panel_border"],
-            padding=(1, 2),
-            style=bg
-        )
-    )
-
-    # FINAL LAYOUT
-
+    elements.append(alerts_text)
     layout = Group(*elements)
 
-    _ensure_live(layout)
+    if _live_display is None:
+        _live_display = Live(layout, console=_console, refresh_per_second=4)
+        _live_display.start()
+    else:
+        _live_display.update(layout)
 
-    _live_display.update(layout, refresh=True)
-
-
-# ==========================================
-# PUBLIC DRAW
-# ==========================================
+def _draw_plain(stats, events, engine):
+    _clear()
+    print("=" * 60)
+    print("Please install 'rich' and 'plotext' for the graph dashboard.")
+    print("pip install -r requirements.txt")
+    print("=" * 60)
 
 def draw(stats, events, engine):
+    if _HAS_RICH_AND_PLT:
+        _draw_rich(stats, events, engine)
+    else:
+        _draw_plain(stats, events, engine)
 
-    _draw_rich(stats, events, engine)
+def stop():
+    """Stops the Live display so the terminal un-blocks correctly."""
+    global _live_display
+    if _HAS_RICH_AND_PLT and _live_display is not None:
+        _live_display.stop()
